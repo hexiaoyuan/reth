@@ -135,6 +135,44 @@ pub trait DebugApi<TxReq: RpcObject> {
         opts: Option<GethDebugTracingCallOptions>,
     ) -> RpcResult<Vec<Vec<GethTrace>>>;
 
+    /// The `debug_traceCallMan2` method lets you run an `eth_callMan2` within the context of the CM2...
+    #[method(name = "traceCallMan2")]
+    async fn debug_trace_call_man2(
+        &self,
+        raw_txs: Vec<Bytes>,
+        block_overrides: Option<alloy_rpc_types::BlockOverrides>,
+        bundles: Vec<Bundle<TxReq>>,
+        state_context: Option<StateContext>,
+        opts: Option<GethDebugTracingCallOptions>,
+        cm2_idx: Option<u8>,
+        comments: Option<String>,
+    ) -> RpcResult<Vec<Vec<GethTrace>>>;
+
+    /// The `debug_traceCallMan3` method lets you run an `eth_callMan3` within the context of the CM2...
+    #[method(name = "traceCallMan3")]
+    async fn debug_trace_call_man3(
+        &self,
+        raw_txs: Vec<Bytes>,
+        block_overrides: Option<alloy_rpc_types::BlockOverrides>,
+        bundles: Vec<Bundle<TxReq>>,
+        state_context: Option<StateContext>,
+        opts: Option<GethDebugTracingCallOptions>,
+        cm2_idx: Option<u8>,
+        comments: Option<String>,
+    ) -> RpcResult<Vec<Vec<(u64, alloy_rpc_types::EthCallResponse)>>>;
+
+    /// The `debug_estimateGas2` method lets you run an `eth_estimateGas2` within the context of CM2...
+    #[method(name = "estimateGas2")]
+    async fn debug_estimate_gas2(
+        &self,
+        request: TxReq,
+        block_id: Option<BlockId>,
+        state_override: Option<alloy_rpc_types::state::StateOverride>,
+        block_overrides: Option<alloy_rpc_types::BlockOverrides>,
+        cm2_idx: Option<u8>,
+        comments: Option<String>,
+    ) -> RpcResult<alloy_primitives::U256>;
+
     /// The `debug_executionWitness` method allows for re-execution of a block with the purpose of
     /// generating an execution witness. The witness comprises of a map of all hashed trie nodes
     /// to their preimages that were required during the execution of the block, including during

@@ -146,6 +146,30 @@ None of this would have been possible without them, so big shoutout to the teams
 - [Erigon](https://github.com/ledgerwatch/erigon) (fka Turbo-Geth): Erigon pioneered the ["Staged Sync" architecture](https://erigon.substack.com/p/erigon-stage-sync-and-control-flows) that Reth is using, as well as [introduced MDBX](https://github.com/ledgerwatch/erigon/wiki/Choice-of-storage-engine) as the database of choice. We thank Erigon for pushing the state of the art research on the performance limits of Ethereum nodes.
 - [Akula](https://github.com/akula-bft/akula/): Reth uses forks of the Apache versions of Akula's [MDBX Bindings](https://github.com/paradigmxyz/reth/pull/132), [FastRLP](https://github.com/paradigmxyz/reth/pull/63) and [ECIES](https://github.com/paradigmxyz/reth/pull/80). Given that these packages were already released under the Apache License, and they implement standardized solutions, we decided not to reimplement them to iterate faster. We thank the Akula team for their contributions to the Rust Ethereum ecosystem and for publishing these packages.
 
+## my fork branch
+```
+#
+git clone git@github.com:hexiaoyuan/reth.git
+#
+git remote add upstream https://github.com/paradigmxyz/reth.git
+git fetch upstream --depth 10
+#
+## copy upstream release to local branch
+#git fetch upstream refs/tags/v1.11.3:refs/tags/v1.11.3
+#git switch -c v1.10.2_fix v1.10.2
+#git push --set-upstream origin v1.10.2_fix
+#
+#
+git switch -c v1.11.3_fix upstream/1.11.3
+git apply zz/reth_v1.11.3_fix.diff -vvvvv
+#...
+make build
+#...
+git push --set-upstream origin v1.11.3_fix
+#
+
+```
+
 ## Warning
 
 The `NippyJar` and `Compact` encoding formats and their implementations are designed for storing and retrieving data internally. They are not hardened to safely read potentially malicious data.
