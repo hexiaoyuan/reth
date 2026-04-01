@@ -146,9 +146,9 @@ where
         if let Some(timeout) = self.timeout {
             limiter = limiter.set_time_limit(timeout);
         };
-        if let Ok(x) = std::env::var("RETH_ENV_PRUNE_DELETE_LIMIT") {
+        if let Ok(x) = std::env::var("RETH_ENV_PRUNE_DELETE_LIMIT2") {
             if let Ok(x) = x.parse::<usize>() {
-                debug!(target: "pruner", %x, "overriding from env RETH_ENV_PRUNE_DELETE_LIMIT");
+                debug!(target: "pruner", %x, "overriding from env RETH_ENV_PRUNE_DELETE_LIMIT2");
                 limiter = limiter.set_deleted_entries_limit(x);
             }
         };

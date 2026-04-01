@@ -84,9 +84,15 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + EthereumHardforks>> PruneComma
             // Use batched pruning with a limit to bound memory, running in a loop until complete.
             //
             // A limit of 20_000_000 results in a max memory usage of ~5G.
-            const DELETE_LIMIT: usize = 20_000_000;
+            let mut delete_limit: usize = 20_000_000;
+            if let Ok(x) = std::env::var("RETH_ENV_PRUNE_DELETE_LIMIT1") {
+                if let Ok(x) = x.parse::<usize>() {
+                    info!(target: "reth::cli", ?x, "overriding from env RETH_ENV_PRUNE_DELETE_LIMIT1");
+                    delete_limit = x;
+                }
+            }
             let mut pruner = PrunerBuilder::new(config)
-                .delete_limit(DELETE_LIMIT)
+                .delete_limit(delete_limit)
                 .build_with_provider_factory(provider_factory.clone());
 
             let mut total_pruned = 0usize;
