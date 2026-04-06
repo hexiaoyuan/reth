@@ -638,7 +638,7 @@ where
 
                     all_bundles.push(results);
                 }
-                info!("callMan2.ok: {:?},{}", start_time.elapsed(), comments);
+                info!("callMan2.ok:bn={},{:?},{}", bn, start_time.elapsed(), comments);
                 Ok(all_bundles)
             })
             .await
@@ -787,7 +787,7 @@ where
                     }
                     all_bundles.push(bundle_results);
                 }
-                info!("callMan3.ok {:?},{}", start_time.elapsed(), comments);
+                info!("callMan3.ok:bn={},{:?},{}", bn, start_time.elapsed(), comments);
                 Ok(all_bundles)
             })
             .await
