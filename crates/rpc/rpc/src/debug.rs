@@ -47,9 +47,9 @@ use tokio_stream::StreamExt;
 
 use alloy_network::TransactionBuilder as _;
 use alloy_primitives::U256;
-use reth_evm::{Evm as _, TransactionEnv as _, TxEnvFor};
-use reth_rpc_eth_types::error::api::{FromEvmError, FromEvmHalt};
-use revm::{context::Block as _, context_interface::Transaction as _};
+use reth_evm::{TransactionEnvMut, TxEnvFor};
+use reth_rpc_eth_types::error::api::FromEvmHalt;
+use revm::{context::Block, context_interface::Transaction, primitives::KECCAK_EMPTY};
 use tracing::info;
 
 /// `debug` API implementation.
@@ -550,7 +550,8 @@ where
 
         let mut at = block.parent_hash();
         let mut replay_block_txs = true;
-        let num_txs = transaction_index.index().unwrap_or_else(|| block.body().transactions().len());
+        let num_txs =
+            transaction_index.index().unwrap_or_else(|| block.body().transactions().len());
         if !target_block.is_pending() && num_txs == block.body().transactions().len() {
             at = block.hash();
             replay_block_txs = false;
@@ -692,7 +693,8 @@ where
 
         let mut at = block.parent_hash();
         let mut replay_block_txs = true;
-        let num_txs = transaction_index.index().unwrap_or_else(|| block.body().transactions().len());
+        let num_txs =
+            transaction_index.index().unwrap_or_else(|| block.body().transactions().len());
         if !target_block.is_pending() && num_txs == block.body().transactions().len() {
             at = block.hash();
             replay_block_txs = false;
@@ -849,6 +851,10 @@ where
         // <https://github.com/ethereum/go-ethereum/blob/ee8e83fa5f6cb261dad2ed0a7bbcde4930c41e6c/internal/ethapi/api.go#L985>
         evm_env.cfg_env.disable_base_fee = true;
 
+        // Disable additional fee charges (e.g. L2 operator fees) for gas estimation,
+        // consistent with `prepare_call_env` for `eth_call`.
+        evm_env.cfg_env.disable_fee_charge = true;
+
         // set nonce to None so that the correct nonce is chosen by the EVM
         request.as_mut().take_nonce();
 
@@ -875,7 +881,7 @@ where
 
         // Apply block overrides if specified.
         if let Some(overrides) = block_overrides {
-            reth_evm::overrides::apply_block_overrides(
+            alloy_evm::overrides::apply_block_overrides(
                 overrides,
                 &mut db,
                 evm_env.block_env.inner_mut(),
@@ -884,7 +890,7 @@ where
 
         // Apply any state overrides if specified.
         if let Some(state_override) = state_override {
-            reth_evm::overrides::apply_state_overrides(state_override, &mut db)
+            alloy_evm::overrides::apply_state_overrides(state_override, &mut db)
                 .map_err(Eth::Error::from_eth_err)?;
         }
 
@@ -893,9 +899,13 @@ where
         // Check if this is a basic transfer (no input data to account with no code)
         let is_basic_transfer = if tx_env.input().is_empty()
             && let revm_primitives::TxKind::Call(to) = tx_env.kind()
-            && let Ok(code) = db.database.0 .0.account_code(&to)
         {
-            code.map(|code| code.is_empty()).unwrap_or(true)
+            match db.database.0 .0.basic_account(&to) {
+                Ok(Some(account)) => {
+                    account.bytecode_hash.is_none() || account.bytecode_hash == Some(KECCAK_EMPTY)
+                }
+                _ => true,
+            }
         } else {
             false
         };
@@ -966,7 +976,7 @@ where
         };
 
         let gas_refund = match res.result {
-            revm::context::result::ExecutionResult::Success { gas_refunded, .. } => gas_refunded,
+            revm::context::result::ExecutionResult::Success { gas, .. } => gas.final_refunded(),
             revm::context::result::ExecutionResult::Halt { reason, .. } => {
                 // here we don't check for invalid opcode because already executed with highest gas
                 // limit
@@ -1161,7 +1171,6 @@ where
 
         Ok(())
     }
-
 
     /// Generates an execution witness for the given block hash. see
     /// [`Self::debug_execution_witness`] for more info.
@@ -1994,9 +2003,6 @@ fn cm2_temp_cache_extend(idx: u8, bn: u64, cache: reth_revm::db::CacheState) {
     } else {
         inner[idx].cache.accounts.extend(cache.accounts);
         inner[idx].cache.contracts.extend(cache.contracts);
-        //inner[idx].cache.logs.extend(cache.logs);
-        //inner[idx].cache.block_hashes.extend(cache.block_hashes);
-        inner[idx].cache.has_state_clear = cache.has_state_clear;
     }
 }
 fn cm2_temp_cache_query_bn(idx: u8) -> Option<u64> {
