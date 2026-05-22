@@ -1,0 +1,35 @@
+# zz_fix
+
+fix reth src
+
+x.
+git remote add upstream https://github.com/paradigmxyz/reth.git
+git fetch upstream --depth 1
+git switch -c v1.11.3_fix upstream/1.11.3
+#
+git apply zz_fix/patches//reth_v1.11.3_fix.diff -vvvvv
+#...
+#git diff upstream/1.11.3 > zz_fix/patches//reth_v1.11.3_fix.diff
+#...
+make build
+#...
+git push --set-upstream origin v1.11.3_fix
+#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#
+
+x.
+git fetch upstream refs/tags/v2.2.0:refs/tags/v2.2.0
+git switch -c v2.2.0_fix v2.2.0
+git push --set-upstream origin v2.2.0_fix
+#...
+git apply zz_fix/patches//reth_v2.0.0_fix.diff -vvvvv
+#...
+#git diff v2.2.0 > zz_fix/patches/reth_v2.2.0_fix.diff
+#...
+make build
+#...
+git push --set-upstream origin v2.2.0_fix
+#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#
+
+x. v1.11.4
+merge into v1.11.3_fix
+#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#
