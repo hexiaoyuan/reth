@@ -867,7 +867,11 @@ pub trait Call:
         if let Some(requested_gas) = request.as_ref().gas_limit() {
             let global_gas_cap = self.call_gas_limit();
             if global_gas_cap != 0 && global_gas_cap < requested_gas {
-                warn!(target: "rpc::eth::call", ?request, ?global_gas_cap, "Capping gas limit to global gas cap");
+                //warn!(target: "rpc::eth::call", ?request, ?global_gas_cap, "Capping gas limit to
+                // global gas cap");// 这个log太大了,精简一下 -- pt01
+                let from = request.as_ref().from();
+                let to = request.as_ref().to();
+                warn!(target: "rpc::eth::call", ?from, ?to, ?global_gas_cap, "Capping gas limit to global gas cap");
                 request.as_mut().set_gas_limit(global_gas_cap);
             }
         } else {
