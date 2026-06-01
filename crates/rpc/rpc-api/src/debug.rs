@@ -146,7 +146,7 @@ pub trait DebugApi<TxReq: RpcObject> {
         opts: Option<GethDebugTracingCallOptions>,
         cm2_idx: Option<u8>,
         comments: Option<String>,
-    ) -> RpcResult<Vec<Vec<GethTrace>>>;
+    ) -> RpcResult<(Vec<Vec<alloy_primitives::Log>>, Vec<Vec<GethTrace>>)>;
 
     /// The `debug_traceCallMan3` method lets you run an `eth_callMan3` within the context of the CM2...
     #[method(name = "traceCallMan3")]
@@ -159,7 +159,7 @@ pub trait DebugApi<TxReq: RpcObject> {
         opts: Option<GethDebugTracingCallOptions>,
         cm2_idx: Option<u8>,
         comments: Option<String>,
-    ) -> RpcResult<Vec<Vec<(u64, alloy_rpc_types::EthCallResponse)>>>;
+    ) -> RpcResult<(Vec<Vec<alloy_primitives::Log>>, Vec<Vec<(u64, alloy_rpc_types::EthCallResponse)>>)>;
 
     /// The `debug_estimateGas2` method lets you run an `eth_estimateGas2` within the context of CM2...
     #[method(name = "estimateGas2")]
