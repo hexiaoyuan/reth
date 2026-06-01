@@ -155,17 +155,17 @@ git remote add upstream https://github.com/paradigmxyz/reth.git
 git fetch upstream --depth 10
 #
 ## copy upstream release to local branch
-#git fetch upstream refs/tags/v1.11.3:refs/tags/v1.11.3
-#git switch -c v1.10.2_fix v1.10.2
-#git push --set-upstream origin v1.10.2_fix
+#git fetch upstream refs/tags/v1.11.4:refs/tags/v1.11.4
+#git switch -c v1.11.4_fix v1.11.4
+#git push --set-upstream origin v1.11.4_fix
 #
 #
-git switch -c v1.11.3_fix upstream/1.11.3
-git apply zz/reth_v1.11.3_fix.diff -vvvvv
+git switch -c v1.11.4_fix upstream/1.11.4
+git apply zz/reth_v1.11.4_fix.diff -vvvvv
 #...
 make build
 #...
-git push --set-upstream origin v1.11.3_fix
+git push --set-upstream origin v1.11.4_fix
 #
 
 ```
