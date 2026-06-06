@@ -23,6 +23,119 @@ index 37e6a9bcd9..ca9f35c8aa 100644
 +#...
 +git push
 +```
+diff --git a/crates/chain-state/src/deferred_trie.rs b/crates/chain-state/src/deferred_trie.rs
+index ea71b92c15..905f93efb0 100644
+--- a/crates/chain-state/src/deferred_trie.rs
++++ b/crates/chain-state/src/deferred_trie.rs
+@@ -50,12 +50,18 @@ enum DeferredTrieDataInner {
+     /// Data is not yet available; raw inputs stored for fallback computation.
+     ///
+     /// Wrapped in `Option` to allow taking ownership during computation.
++    // jnt-v2 fix: PATCH 2 makes `pending` store Ready, so this variant is no longer
++    // constructed (still matched by wait_cloned/Debug). Kept intentionally.
++    #[allow(dead_code)]
+     Pending(Option<PendingInputs>),
+     /// Data has been computed and is ready.
+     Ready(ComputedTrieData),
+ }
+ 
+ /// Inputs kept while a deferred trie computation is pending.
++// jnt-v2 fix: PATCH 2 makes `pending` store Ready, so these fields are no longer
++// constructed/read on any live path. Kept intentionally (matched by wait_cloned).
++#[allow(dead_code)]
+ #[derive(Clone, Debug)]
+ struct PendingInputs {
+     /// Unsorted hashed post-state from execution.
+@@ -81,12 +87,11 @@ impl fmt::Debug for DeferredTrieData {
+ impl DeferredTrieData {
+     /// Create a new pending handle with fallback inputs for synchronous computation.
+     pub fn pending(hashed_state: Arc<HashedPostState>, trie_updates: Arc<TrieUpdates>) -> Self {
+-        Self {
+-            state: Arc::new(Mutex::new(DeferredTrieDataInner::Pending(Some(PendingInputs {
+-                hashed_state,
+-                trie_updates,
+-            })))),
+-        }
++        // FIX (jnt-v2 engine wedge): compute eagerly and store Ready. The lazy variant computed
++        // inside wait_cloned WHILE HOLDING the Mutex (Self::sort runs a rayon::join), which
++        // deadlocked the overlay/engine machinery. Computing up-front means wait_cloned always
++        // finds Ready and never holds the lock across a compute (no deadlock, no busy-wait).
++        Self::ready(Self::sort(hashed_state, trie_updates))
+     }
+ 
+     /// Create a handle that is already populated with the given [`ComputedTrieData`].
+diff --git a/crates/chain-state/src/state_trie_overlay.rs b/crates/chain-state/src/state_trie_overlay.rs
+index d7baef361f..bf2c94208c 100644
+--- a/crates/chain-state/src/state_trie_overlay.rs
++++ b/crates/chain-state/src/state_trie_overlay.rs
+@@ -289,41 +289,40 @@ impl<N: NodePrimitives> StateTrieOverlayManager<N> {
+             None => ComputeOverlayInput::MergeBlocks(blocks),
+         };
+ 
+-        // The vacant entry is the cache-fill gate: racing callers block instead of recomputing.
++        // FIX (jnt-v2 engine wedge): do not hold an `overlays` DashMap entry (shard write) guard
++        // across the blocking overlay compute. Compute first, then recheck-and-insert.
++        self.metrics.overlay_cache_fills.increment(1);
++        let computed = {
++            #[cfg(feature = "rayon")]
++            {
++                if let Some(worker_pool) = &self.worker_pool {
++                    let compute_span = span.clone();
++                    let metrics = self.metrics.clone();
++                    Arc::new(worker_pool.install_fn(move || {
++                        let _guard = compute_span.enter();
++                        compute_overlay(compute_input, anchor_hash, &metrics)
++                    }))
++                } else {
++                    Arc::new(compute_overlay(compute_input, anchor_hash, &self.metrics))
++                }
++            }
++
++            #[cfg(not(feature = "rayon"))]
++            {
++                Arc::new(compute_overlay(compute_input, anchor_hash, &self.metrics))
++            }
++        };
+         let input = match self.overlays.entry(key) {
+             Entry::Occupied(entry) => {
+                 self.metrics.overlay_cache_reuses.increment(1);
+                 span.record("cache_reused", true);
+-                return Ok(Arc::clone(entry.get()))
++                Arc::clone(entry.get())
+             }
+             Entry::Vacant(entry) => {
+-                self.metrics.overlay_cache_fills.increment(1);
+-                let input = {
+-                    #[cfg(feature = "rayon")]
+-                    {
+-                        if let Some(worker_pool) = &self.worker_pool {
+-                            let compute_span = span;
+-                            let metrics = self.metrics.clone();
+-                            Arc::new(worker_pool.install_fn(move || {
+-                                let _guard = compute_span.enter();
+-                                compute_overlay(compute_input, anchor_hash, &metrics)
+-                            }))
+-                        } else {
+-                            Arc::new(compute_overlay(compute_input, anchor_hash, &self.metrics))
+-                        }
+-                    }
+-
+-                    #[cfg(not(feature = "rayon"))]
+-                    {
+-                        Arc::new(compute_overlay(compute_input, anchor_hash, &self.metrics))
+-                    }
+-                };
+-
+-                entry.insert(Arc::clone(&input));
+-                input
++                entry.insert(Arc::clone(&computed));
++                computed
+             }
+         };
+-
+         Ok(input)
+     }
+ 
 diff --git a/crates/cli/commands/src/prune.rs b/crates/cli/commands/src/prune.rs
 index a48847f751..af9abd6ae4 100644
 --- a/crates/cli/commands/src/prune.rs
@@ -9344,10 +9457,10 @@ index 0000000000..070956370c
 +\ No newline at end of file
 diff --git a/zz_fix/patches/rev_81c0261_fix.diff b/zz_fix/patches/rev_81c0261_fix.diff
 new file mode 100644
-index 0000000000..4d3dbcaa32
+index 0000000000..9f0d421c2b
 --- /dev/null
 +++ b/zz_fix/patches/rev_81c0261_fix.diff
-@@ -0,0 +1,9248 @@
+@@ -0,0 +1,9437 @@
 +diff --git a/README.md b/README.md
 +index 37e6a9bcd9..ca9f35c8aa 100644
 +--- a/README.md
@@ -9373,6 +9486,119 @@ index 0000000000..4d3dbcaa32
 ++#...
 ++git push
 ++```
++diff --git a/crates/chain-state/src/deferred_trie.rs b/crates/chain-state/src/deferred_trie.rs
++index ea71b92c15..905f93efb0 100644
++--- a/crates/chain-state/src/deferred_trie.rs
+++++ b/crates/chain-state/src/deferred_trie.rs
++@@ -50,12 +50,18 @@ enum DeferredTrieDataInner {
++     /// Data is not yet available; raw inputs stored for fallback computation.
++     ///
++     /// Wrapped in `Option` to allow taking ownership during computation.
+++    // jnt-v2 fix: PATCH 2 makes `pending` store Ready, so this variant is no longer
+++    // constructed (still matched by wait_cloned/Debug). Kept intentionally.
+++    #[allow(dead_code)]
++     Pending(Option<PendingInputs>),
++     /// Data has been computed and is ready.
++     Ready(ComputedTrieData),
++ }
++ 
++ /// Inputs kept while a deferred trie computation is pending.
+++// jnt-v2 fix: PATCH 2 makes `pending` store Ready, so these fields are no longer
+++// constructed/read on any live path. Kept intentionally (matched by wait_cloned).
+++#[allow(dead_code)]
++ #[derive(Clone, Debug)]
++ struct PendingInputs {
++     /// Unsorted hashed post-state from execution.
++@@ -81,12 +87,11 @@ impl fmt::Debug for DeferredTrieData {
++ impl DeferredTrieData {
++     /// Create a new pending handle with fallback inputs for synchronous computation.
++     pub fn pending(hashed_state: Arc<HashedPostState>, trie_updates: Arc<TrieUpdates>) -> Self {
++-        Self {
++-            state: Arc::new(Mutex::new(DeferredTrieDataInner::Pending(Some(PendingInputs {
++-                hashed_state,
++-                trie_updates,
++-            })))),
++-        }
+++        // FIX (jnt-v2 engine wedge): compute eagerly and store Ready. The lazy variant computed
+++        // inside wait_cloned WHILE HOLDING the Mutex (Self::sort runs a rayon::join), which
+++        // deadlocked the overlay/engine machinery. Computing up-front means wait_cloned always
+++        // finds Ready and never holds the lock across a compute (no deadlock, no busy-wait).
+++        Self::ready(Self::sort(hashed_state, trie_updates))
++     }
++ 
++     /// Create a handle that is already populated with the given [`ComputedTrieData`].
++diff --git a/crates/chain-state/src/state_trie_overlay.rs b/crates/chain-state/src/state_trie_overlay.rs
++index d7baef361f..bf2c94208c 100644
++--- a/crates/chain-state/src/state_trie_overlay.rs
+++++ b/crates/chain-state/src/state_trie_overlay.rs
++@@ -289,41 +289,40 @@ impl<N: NodePrimitives> StateTrieOverlayManager<N> {
++             None => ComputeOverlayInput::MergeBlocks(blocks),
++         };
++ 
++-        // The vacant entry is the cache-fill gate: racing callers block instead of recomputing.
+++        // FIX (jnt-v2 engine wedge): do not hold an `overlays` DashMap entry (shard write) guard
+++        // across the blocking overlay compute. Compute first, then recheck-and-insert.
+++        self.metrics.overlay_cache_fills.increment(1);
+++        let computed = {
+++            #[cfg(feature = "rayon")]
+++            {
+++                if let Some(worker_pool) = &self.worker_pool {
+++                    let compute_span = span.clone();
+++                    let metrics = self.metrics.clone();
+++                    Arc::new(worker_pool.install_fn(move || {
+++                        let _guard = compute_span.enter();
+++                        compute_overlay(compute_input, anchor_hash, &metrics)
+++                    }))
+++                } else {
+++                    Arc::new(compute_overlay(compute_input, anchor_hash, &self.metrics))
+++                }
+++            }
+++
+++            #[cfg(not(feature = "rayon"))]
+++            {
+++                Arc::new(compute_overlay(compute_input, anchor_hash, &self.metrics))
+++            }
+++        };
++         let input = match self.overlays.entry(key) {
++             Entry::Occupied(entry) => {
++                 self.metrics.overlay_cache_reuses.increment(1);
++                 span.record("cache_reused", true);
++-                return Ok(Arc::clone(entry.get()))
+++                Arc::clone(entry.get())
++             }
++             Entry::Vacant(entry) => {
++-                self.metrics.overlay_cache_fills.increment(1);
++-                let input = {
++-                    #[cfg(feature = "rayon")]
++-                    {
++-                        if let Some(worker_pool) = &self.worker_pool {
++-                            let compute_span = span;
++-                            let metrics = self.metrics.clone();
++-                            Arc::new(worker_pool.install_fn(move || {
++-                                let _guard = compute_span.enter();
++-                                compute_overlay(compute_input, anchor_hash, &metrics)
++-                            }))
++-                        } else {
++-                            Arc::new(compute_overlay(compute_input, anchor_hash, &self.metrics))
++-                        }
++-                    }
++-
++-                    #[cfg(not(feature = "rayon"))]
++-                    {
++-                        Arc::new(compute_overlay(compute_input, anchor_hash, &self.metrics))
++-                    }
++-                };
++-
++-                entry.insert(Arc::clone(&input));
++-                input
+++                entry.insert(Arc::clone(&computed));
+++                computed
++             }
++         };
++-
++         Ok(input)
++     }
++ 
 +diff --git a/crates/cli/commands/src/prune.rs b/crates/cli/commands/src/prune.rs
 +index a48847f751..af9abd6ae4 100644
 +--- a/crates/cli/commands/src/prune.rs
@@ -18595,5 +18821,81 @@ index 0000000000..4d3dbcaa32
 +++++            }
 +++++            revm::context::result::ExecutionResult::Revert { .. }
 +++++            | revm::context::result::ExecutionResult::Halt { .. } => {
-+++++                // We know that transaction succeeded with a higher gas limit before
++++++                // We know that transaction succeeded with a higher gas limit before, so any failure
++++++                // means that we need to increase it.
++++++                //
++++++                // We are ignoring all halts here, and not just OOG errors because there are cases when
++++++                // non-OOG halt might flag insufficient gas limit as well.
++++++                //
++++++                // Common usage of invalid opcode in OpenZeppelin:
++++++                // <https://github.com/OpenZeppelin/openzeppelin-contracts/blob/94697be8a3f0dfcd95dfb13ffbd39b5973f5c65d/contracts/metatx/ERC2771Forwarder.sol#L360-L367>
++++++                *lowest_gas_limit = tx_gas_limit;
++++++            }
++++++        };
++++++
++++++        Ok(())
++++++    }
++++++
+++++     /// Generates an execution witness for the given block hash. see
+++++     /// [`Self::debug_execution_witness`] for more info.
+++++     pub async fn debug_execution_witness_by_block_hash(
+++++@@ -842,6 +1521,79 @@ where
+++++         Self::debug_trace_call_many(self, bundles, state_context, opts).await.map_err(Into::into)
+++++     }
+++++ 
++++++    async fn debug_trace_call_man2(
++++++        &self,
++++++        raw_txs: Vec<Bytes>,
++++++        block_overrides: Option<alloy_rpc_types::BlockOverrides>,
++++++        bundles: Vec<Bundle<RpcTxReq<Eth::NetworkTypes>>>,
++++++        state_context: Option<StateContext>,
++++++        opts: Option<GethDebugTracingCallOptions>,
++++++        cm2_idx: Option<u8>,
++++++        comments: Option<String>,
++++++    ) -> RpcResult<Vec<Vec<GethTrace>>> {
++++++        let _permit = self.acquire_trace_permit().await;
++++++        Self::debug_trace_call_man2(
++++++            self,
++++++            raw_txs,
++++++            block_overrides,
++++++            bundles,
++++++            state_context,
++++++            opts,
++++++            cm2_idx,
++++++            comments.unwrap_or_default(),
++++++        )
++++++        .await
++++++        .map_err(Into::into)
++++++    }
++++++
++++++    async fn debug_trace_call_man3(
++++++        &self,
++++++        raw_txs: Vec<Bytes>,
++++++        block_overrides: Option<alloy_rpc_types::BlockOverrides>,
++++++        bundles: Vec<Bundle<RpcTxReq<Eth::NetworkTypes>>>,
++++++        state_context: Option<StateContext>,
++++++        opts: Option<GethDebugTracingCallOptions>,
++++++        cm2_idx: Option<u8>,
++++++        comments: Option<String>,
++++++    ) -> RpcResult<Vec<Vec<(u64, alloy_rpc_types::EthCallResponse)>>> {
++++++        let _permit = self.acquire_trace_permit().await;
++++++        Self::debug_trace_call_man3(
++++++            self,
++++++            raw_txs,
++++++            block_overrides,
++++++            bundles,
++++++            state_context,
++++++            opts,
++++++            cm2_idx,
++++++            comments.unwrap_or_default(),
++++++        )
++++++        .await
++++++        .map_err(Into::into)
++++++    }
++++++
++++++    async fn debug_estimate_gas2(
++++++        &self,
++++++        request: RpcTxReq<Eth::NetworkTypes>,
++++++        block_id: Option<BlockId>,
++++++        state_override: Option<alloy_rpc_t
 \ No newline at end of file
