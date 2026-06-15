@@ -516,7 +516,7 @@ where
         opts: Option<GethDebugTracingCallOptions>,
         cm2_idx: Option<u8>,
         comments: String,
-    ) -> Result<Vec<Vec<GethTrace>>, Eth::Error> {
+    ) -> Result<(Vec<Vec<alloy_primitives::Log>>, Vec<Vec<GethTrace>>), Eth::Error> {
         let StateContext { transaction_index, block_number } = state_context.unwrap_or_default();
         let transaction_index = transaction_index.unwrap_or_default();
         let cm2_idx = cm2_idx.unwrap_or(0);
@@ -576,6 +576,7 @@ where
                 }
 
                 // Execute all raw-transactions -- pt01
+                let mut raw_txs_logs = Vec::with_capacity(raw_txs.len());
                 if raw_txs.len() > 0 {
                     // NOTE: 这个参数只是针对raw_txs时用的;
                     if let Some(overrides) = block_overrides {
@@ -594,6 +595,7 @@ where
                         >(&tx)?;
                         let tx_env = eth_api.evm_config().tx_env(tx);
                         let res = eth_api.transact(&mut db, evm_env.clone(), tx_env)?;
+                        raw_txs_logs.push(res.result.into_logs());
                         // info!("xxxx.db.commit");
                         db.commit(res.state);
                     }
@@ -644,7 +646,7 @@ where
                     all_bundles.push(results);
                 }
                 info!("callMan2.ok:bn={},{:?},{}", bn, start_time.elapsed(), comments);
-                Ok(all_bundles)
+                Ok((raw_txs_logs, all_bundles))
             })
             .await
     }
@@ -660,7 +662,7 @@ where
         opts: Option<GethDebugTracingCallOptions>,
         cm2_idx: Option<u8>,
         comments: String,
-    ) -> Result<Vec<Vec<(u64, alloy_rpc_types::EthCallResponse)>>, Eth::Error> {
+    ) -> Result<(Vec<Vec<alloy_primitives::Log>>, Vec<Vec<(u64, alloy_rpc_types::EthCallResponse)>>), Eth::Error> {
         let StateContext { transaction_index, block_number } = state_context.unwrap_or_default();
         let transaction_index = transaction_index.unwrap_or_default();
         let cm2_idx = cm2_idx.unwrap_or(0);
@@ -721,6 +723,7 @@ where
                 }
 
                 // Execute all raw-transactions -- pt01
+                let mut raw_txs_logs = Vec::with_capacity(raw_txs.len());
                 if raw_txs.len() > 0 {
                     // NOTE: 这个参数只是针对raw_txs时用的;
                     if let Some(overrides) = block_overrides {
@@ -739,6 +742,7 @@ where
                         >(&tx)?;
                         let tx_env = eth_api.evm_config().tx_env(tx);
                         let res = eth_api.transact(&mut db, evm_env.clone(), tx_env)?;
+                        raw_txs_logs.push(res.result.into_logs());
                         // info!("xxxx.db.commit");
                         db.commit(res.state);
                     }
@@ -796,7 +800,7 @@ where
                     all_bundles.push(bundle_results);
                 }
                 info!("callMan3.ok:bn={},{:?},{}", bn, start_time.elapsed(), comments);
-                Ok(all_bundles)
+                Ok((raw_txs_logs, all_bundles))
             })
             .await
     }
@@ -1629,7 +1633,7 @@ where
         opts: Option<GethDebugTracingCallOptions>,
         cm2_idx: Option<u8>,
         comments: Option<String>,
-    ) -> RpcResult<Vec<Vec<GethTrace>>> {
+    ) -> RpcResult<(Vec<Vec<revm_primitives::Log>>, Vec<Vec<GethTrace>>)> {
         let _permit = self.acquire_trace_permit().await;
         Self::debug_trace_call_man2(
             self,
@@ -1654,7 +1658,7 @@ where
         opts: Option<GethDebugTracingCallOptions>,
         cm2_idx: Option<u8>,
         comments: Option<String>,
-    ) -> RpcResult<Vec<Vec<(u64, alloy_rpc_types::EthCallResponse)>>> {
+    ) -> RpcResult<(Vec<Vec<revm_primitives::Log>>, Vec<Vec<(u64, alloy_rpc_types::EthCallResponse)>>)> {
         let _permit = self.acquire_trace_permit().await;
         Self::debug_trace_call_man3(
             self,
