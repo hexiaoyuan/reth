@@ -19,7 +19,7 @@ use reth_prune_types::{
 use reth_static_file_types::StaticFileSegment;
 use reth_storage_api::{StorageChangeSetReader, StorageSettingsCache};
 use rustc_hash::FxHashMap;
-use tracing::{instrument, trace};
+use tracing::{instrument, debug, trace};
 
 /// Number of storage history tables to prune in one step.
 ///
@@ -146,7 +146,7 @@ impl StorageHistory {
                 .static_file_provider()
                 .delete_segment_below_block(StaticFileSegment::StorageChangeSets, last_block + 1)?;
         }
-        trace!(target: "pruner", pruned = %pruned_changesets, %done, "Pruned storage history (changesets from static files)");
+        debug!(target: "pruner", pruned = %pruned_changesets, %done, ?last_changeset_pruned_block, "Pruned storage history (changesets from static files)");
 
         let result = HistoryPruneResult {
             highest_deleted: highest_deleted_storages,
@@ -210,7 +210,7 @@ impl StorageHistory {
                     last_changeset_pruned_block = Some(block_number);
                 },
             )?;
-        trace!(target: "pruner", deleted = %pruned_changesets, %done, "Pruned storage history (changesets)");
+        debug!(target: "pruner", deleted = %pruned_changesets, %done, ?last_changeset_pruned_block, "Pruned storage history (changesets)");
 
         let result = HistoryPruneResult {
             highest_deleted: highest_deleted_storages,
@@ -306,7 +306,7 @@ impl StorageHistory {
             Ok(((), Some(batch.into_inner())))
         })?;
 
-        trace!(target: "pruner", deleted = deleted_shards, updated = updated_shards, %done, "Pruned storage history (RocksDB indices)");
+        debug!(target: "pruner", deleted = deleted_shards, updated = updated_shards, %done, ?last_changeset_pruned_block, "Pruned storage history (RocksDB indices)");
 
         // Delete static file jars only when fully processed. During provider.commit(), RocksDB
         // batch is committed before the MDBX checkpoint. If crash occurs after RocksDB commit
