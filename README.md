@@ -145,3 +145,24 @@ The `NippyJar` and `Compact` encoding formats and their implementations are desi
 
 [book]: https://reth.rs/
 [tg-url]: https://t.me/paradigm_reth
+
+
+## my-fork
+
+```
+#####----------------#####
+git remote add upstream https://github.com/paradigmxyz/reth.git
+#
+git fetch upstream refs/tags/v2.4.1:refs/tags/v2.4.1
+git switch -c v2.4.1_fix v2.4.1
+#
+git push --set-upstream origin v2.4.1_fix
+#...
+git apply patch_reth_v2.4.1_fix.diff -vvvvv
+#...
+#git diff v2.4.1 > patch_reth_v2.4.1_fix.diff
+#...
+make build
+#...
+git push --set-upstream origin v2.4.1_fix
+```
