@@ -145,3 +145,24 @@ The `NippyJar` and `Compact` encoding formats and their implementations are desi
 
 [book]: https://reth.rs/
 [tg-url]: https://t.me/paradigm_reth
+
+
+## my-fork
+
+```
+#####----------------#####
+git remote add base https://github.com/base/reth.git
+git fetch --depth=1 base base-v2.5.2.3
+git switch -c fix_base_2.5.2.3 FETCH_HEAD
+#注：FETCH_HEAD 代表你刚刚通过 git fetch 拉取到的最新那个分支的提交点，这样最不容易出错。
+#
+#
+#...
+git apply 1.diff -vvvvv
+#...
+#git diff 76a826109009c936c2ea98766e0b6b50d2803d26 > 1.diff
+#...
+make build
+#...
+git push --set-upstream origin fix_base_2.5.2.3
+```
