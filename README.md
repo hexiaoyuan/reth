@@ -145,3 +145,23 @@ The `NippyJar` and `Compact` encoding formats and their implementations are desi
 
 [book]: https://reth.rs/
 [tg-url]: https://t.me/paradigm_reth
+
+
+## my-fork
+
+```
+#####----------------#####
+git remote add base https://github.com/base/reth.git
+git fetch --depth=1 base base-v2.5.2.8
+git switch -c fix_base_2.5.2.8 base-v2.5.2.8
+#
+#...
+git apply 1.diff -vvvvv
+#...
+#git diff base-v2.5.2.8 > 1.diff
+#...
+#sudo .github/scripts/install_llvm_ubuntu.sh
+make build
+#...
+git push --set-upstream origin fix_base_2.5.2.8
+```
